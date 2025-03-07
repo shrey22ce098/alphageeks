@@ -1,0 +1,33 @@
+/* index.css or App.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Smooth transitions */
+button,
+.service-card {
+  @apply transition-all duration-300 ease-in-out;
+}
+
+/* Hover Effects */
+button:hover {
+  @apply scale-105 shadow-lg;
+}
+
+.service-card:hover {
+  @apply bg-blue-50 shadow-xl;
+}
+
+/* Swiper Styling */
+.swiper-slide {
+  @apply flex justify-center items-center h-40 bg-blue-100 rounded-xl;
+}
+
+/* Responsive Navbar */
+.navbar-menu {
+  @apply md:flex hidden items-center space-x-4;
+}
+
+.navbar-mobile {
+  @apply md:hidden flex items-center;
+}
