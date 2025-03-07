@@ -1,0 +1,675 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model Usera {
+  id                String           @id @default(uuid())
+  email             String           @unique
+  phone             String           @unique
+  password          String
+  name              String
+  role              Role             @default(user)
+  gender            Gender
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  isVerified        Boolean          @default(false)
+  otp       String?
+  otpExpiry DateTime?
+    user             User?
+  doctor                Doctor?
+}
+
+ 
+       
+enum Role{
+  user
+  doctor
+  admine
+}
+
+enum Gender{
+  male
+  female
+  other
+}
+enum BloodType{
+  A_plus
+  A_minus
+  B_plus
+  B_minus
+  AB_plus
+  AB_minus
+  o_plus
+  o_minus
+}
+
+model User{
+  id String @id @default(uuid())  
+  dateofBirth DateTime
+  height Float
+  weight Float
+  age    Int
+  useraId           String           @unique
+  usera             Usera            @relation(fields: [useraId], references: [id])
+  bloodType BloodType?
+    // medicalHistory    MedicalHistory?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  isVerified        Boolean          @default(false)
+  appointments    Appointment[]
+
+  // feedback          Feedback[]
+  // preferredDoctors  PreferredDoctor[]
+  // notifications     Notification[]
+
+
+}
+
+
+// model Patient {
+//   id              String        @id @default(uuid())
+//   medicalHistory  String?
+//   createdAt       DateTime      @default(now())
+//   updatedAt       DateTime      @updatedAt
+//   useraId         String        @unique
+//   usera           Usera         @relation(fields: [useraId], references: [id])
+  
+//   appointments    Appointment[]
+// }
+
+model Doctor {
+  id                String           @id @default(uuid())
+  licenseId         String           @unique
+  bio               String?
+  profileImage       String
+  
+  address              String?
+  city                 String?
+  state                String?
+  maplink                 String?
+  isVerified        Boolean          @default(true)
+  isActive          Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  useraId           String           @unique
+  usera             Usera            @relation(fields: [useraId], references: [id])
+
+  specializations      DoctorSpecialization[]
+  doctorLanguages      DoctorLanguage[]
+  education            Education[]
+  appointments      Appointment[]
+  dateSchedules     DateSchedule[]   // Added date-based schedules
+
+  
+  schedules         DoctorSchedule[]
+
+
+   @@index([city])
+  @@index([isActive, isVerified])
+}
+
+
+
+model DateSchedule {
+  id                 String          @id @default(uuid())
+  doctorId           String
+  doctor             Doctor          @relation(fields: [doctorId], references: [id])
+  scheduleDate       DateTime        // Specific date for this schedule
+  isAvailable        Boolean         @default(true)
+  appointmentDuration Int ?           // Duration in minutes
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  
+  dateTimeSlots      DateTimeSlot[]
+  
+  @@unique([doctorId, scheduleDate])
+}
+
+model DateTimeSlot {
+  id               String        @id @default(uuid())
+  dateScheduleId   String
+  dateSchedule     DateSchedule  @relation(fields: [dateScheduleId], references: [id], onDelete: Cascade)
+  startTime        String        // Format: "HH:MM"
+  endTime          String        // Format: "HH:MM"
+  isBooked         Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  
+  appointment      Appointment?  @relation("DateSlotAppointment")
+  
+  @@unique([dateScheduleId, startTime, endTime])
+}
+
+
+
+
+model DoctorSchedule {
+  id               String     @id @default(uuid())
+  doctorId         String
+  doctor           Doctor     @relation(fields: [doctorId], references: [id])
+  dayOfWeek        String     // "Monday", "Tuesday", etc.
+  isAvailable      Boolean    @default(true)
+  appointmentDuration Int     // Duration in minutes
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  
+  timeSlots        TimeSlot[]
+  
+  @@unique([doctorId, dayOfWeek])
+}
+
+model TimeSlot {
+  id               String        @id @default(uuid())
+  scheduleId       String
+  schedule         DoctorSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  startTime        String        // Format: "HH:MM"
+  endTime          String        // Format: "HH:MM"
+  isBooked         Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  
+  appointment      Appointment?  @relation("WeeklySlotAppointment")
+  
+  @@unique([scheduleId, startTime, endTime])
+}
+
+model Appointment {
+  id                String       @id @default(uuid())
+  doctorId          String
+  doctor            Doctor       @relation(fields: [doctorId], references: [id])
+  patientId         String
+  patient           User      @relation(fields: [patientId], references: [id])
+  
+  // One of the following will be set (but not both)
+  timeSlotId        String?      @unique
+  timeSlot          TimeSlot?    @relation("WeeklySlotAppointment", fields: [timeSlotId], references: [id])
+  
+  dateTimeSlotId    String?      @unique
+  dateTimeSlot      DateTimeSlot? @relation("DateSlotAppointment", fields: [dateTimeSlotId], references: [id])
+  
+  appointmentDate   DateTime     // The actual date of the appointment
+  status            String       @default("SCHEDULED") // "SCHEDULED", "COMPLETED", "CANCELLED"
+  notes             String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+}
+
+model Specialization {
+  id                 Int                   @id @default(autoincrement())
+  name               String                @unique
+  description        String?
+  doctors            DoctorSpecialization[]
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+}
+
+model DoctorSpecialization {
+  id                Int             @id @default(autoincrement())
+  doctorId          String
+  specializationId  Int
+  isPrimary         Boolean         @default(false)
+  consultationFees   String?
+  doctor            Doctor          @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  specialization    Specialization  @relation(fields: [specializationId], references: [id], onDelete: Cascade)
+  
+  @@unique([doctorId, specializationId])
+  @@index([doctorId])
+  @@index([specializationId])
+}
+
+
+model Language {
+  id               Int               @id @default(autoincrement())
+  name             String            @unique
+  code             String            @unique
+  doctorLanguages  DoctorLanguage[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model DoctorLanguage {
+  id          Int       @id @default(autoincrement())
+  doctorId    String
+  languageId  Int
+  fluency     String?   // native, fluent, conversational, basic
+  
+  doctor      Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  language    Language  @relation(fields: [languageId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, languageId])
+  @@index([doctorId])
+  @@index([languageId])
+}
+
+model Education {
+  id              Int       @id @default(autoincrement())
+  doctorId        String
+  degree          String
+  institution     String
+  year            Int
+  
+  doctor          Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  
+  @@index([doctorId])
+}
+
+model City {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  state       String?
+  country     String    @default("India")
+  
+  @@index([name])
+}
+
+
+// model PreferredDoctor {
+//   id          String    @id @default(uuid())
+//   userId      String
+//   user        User      @relation(fields: [userId], references: [id])
+//   doctorId    String
+//   doctor      Doctor    @relation(fields: [doctorId], references: [id])
+//   createdAt   DateTime  @default(now())
+  
+//   @@unique([userId, doctorId])
+// }
+// model Notification {
+//   id          String    @id @default(uuid())
+//   title       String
+//   message     String
+//   isRead      Boolean   @default(false)
+//   userId      String?
+//   user        User?     @relation(fields: [userId], references: [id])
+//   doctorId    String?
+//   doctor      Doctor?   @relation(fields: [doctorId], references: [id])
+//   createdAt   DateTime  @default(now())
+// }
+
+
+// model AvailableSlot {
+//   id          String    @id @default(uuid())
+//   doctorId    String
+//   doctor      Doctor    @relation(fields: [doctorId], references: [id])
+//   day         String    // Monday, Tuesday, etc.
+//   startTime   DateTime
+//   endTime     DateTime
+//   isOnline    Boolean   @default(false)
+//   isBooked    Boolean   @default(false)
+//   createdAt   DateTime  @default(now())
+//   updatedAt   DateTime  @updatedAt
+//   appointment Appointment?
+// }
+
+
+// model Appointment {
+//   id              String        @id @default(uuid())
+//   userId          String
+//   user            User          @relation(fields: [userId], references: [id])
+//   doctorId        String
+//   doctor          Doctor        @relation(fields: [doctorId], references: [id])
+//   slotId          String        @unique
+//   slot            AvailableSlot @relation(fields: [slotId], references: [id])
+//   appointmentDate DateTime
+//   consultationType String       // Online or Offline
+//   status          String        // Scheduled, Completed, Canceled
+//   zoomLink        String?       // For online consultations
+//   notes           String?
+//   createdAt       DateTime      @default(now())
+//   updatedAt       DateTime      @updatedAt
+//   prescription    Prescription?
+//   feedback        Feedback?
+// }
+
+// model MedicalHistory {
+//   id                    String    @id @default(uuid())
+//   userId                String    @unique
+//   user                  User      @relation(fields: [userId], references: [id])
+//   allergies             String?
+//   chronicDiseases       String?
+//   surgicalHistory       String?
+//   currentMedications    String?
+//   familyMedicalHistory  String?
+//   createdAt             DateTime  @default(now())
+//   updatedAt             DateTime  @updatedAt
+// }
+// model Prescription {
+//   id              String      @id @default(uuid())
+//   appointmentId   String      @unique
+//   appointment     Appointment @relation(fields: [appointmentId], references: [id])
+//   doctorId        String
+//   doctor          Doctor      @relation(fields: [doctorId], references: [id])
+//   prescriptionText String
+//   medicines       Medicine[]
+//   notes           String?
+//   fileUrl         String?     // URL to the prescription file if uploaded
+//   createdAt       DateTime    @default(now())
+//   updatedAt       DateTime    @updatedAt
+// }
+// model Medicine {
+//   id              String        @id @default(uuid())
+//   prescriptionId  String
+//   prescription    Prescription  @relation(fields: [prescriptionId], references: [id])
+//   name            String
+//   dosage          String
+//   frequency       String
+//   duration        String
+//   notes           String?
+//   createdAt       DateTime      @default(now())
+//   updatedAt       DateTime      @updatedAt
+// }
+
+// model Specialization {
+//   id          String    @id @default(uuid())
+//   name        String    @unique
+//   description String?
+//   createdAt   DateTime  @default(now())
+//   updatedAt   DateTime  @updatedAt
+// }
+
+
+// model Feedback {
+//   id              String      @id @default(uuid())
+//   appointmentId   String      @unique
+//   appointment     Appointment @relation(fields: [appointmentId], references: [id])
+//   userId          String
+//   user            User        @relation(fields: [userId], references: [id])
+//   doctorId        String
+//   doctor          Doctor      @relation(fields: [doctorId], references: [id])
+//   rating          Int         // 1-5 stars
+//   review          String?
+//   createdAt       DateTime    @default(now())
+//   updatedAt       DateTime    @updatedAt
+// }
+
+
+
+
+
+
+
+// This is your Prisma schema file,
+// // learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+
+// model User{
+//   id String @id @default(uuid())  
+//   email String @unique
+//   phone String
+  
+// }
+
+// model UserProfile{
+//   id String @id @default(uuid())  
+//   firstName String
+//   lastName String
+//   dateofBirth DateTime
+//   gender Gender
+//   height Float
+//   weight Float
+//   bloodType BloodType?
+//   medicalHistory MedicalHistory?
+//   appointments    Appointment[]
+
+// }
+
+// model MedicalHistory{
+//   id String @id @default(uuid())
+//   userId String @unique
+//   user UserProfile @relation(fields: [userId],references: [id])
+//   allergies Allergy[]
+// }
+
+// model Allergy{
+//   id String @id @default(uuid())
+//   medicalHistoryId String
+//   medicalHistory MedicalHistory @relation(fields: [medicalHistoryId],references: [id])
+//   allergen String
+//   severity Severity
+//   diagnosed DateTime
+// }
+
+
+// enum Gender{
+//   male
+//   female
+//   other
+// }
+
+
+
+// enum Severity {
+//   mild
+//   moderate
+//   severe
+// }
+
+
+
+// // model User {
+// //   id              Int      @id @default(autoincrement())
+// //   name            String
+// //   email           String   @unique
+// //   phone           String   @unique
+// //   password        String
+// //   age             Int?
+// //   gender          Gender?
+// //   medicalHistory  String?
+// //   isVerified      Boolean  @default(false)
+// //   emailVerifiedAt DateTime?
+// //   phoneVerifiedAt DateTime?
+// //   createdAt       DateTime @default(now())
+// //   updatedAt       DateTime @updatedAt
+// //   appointments    Appointment[]
+// //   reviews         Review[]
+// // }
+
+
+
+// model Doctor {
+//   id              Int      @id @default(autoincrement())
+//   name            String
+//   email           String   @unique
+//   phone           String   @unique
+//   password        String
+//   specialization  String
+//   experience      Int
+//   licenseId       String   @unique
+//   isVerified      Boolean  @default(false)
+//   consultationFee Decimal  @default(0.0)
+//   bio             String?
+//   profileImage    String?
+//   createdAt       DateTime @default(now())
+//   updatedAt       DateTime @updatedAt
+//   hospitals       DoctorHospital[]
+//   availability    AvailabilitySlot[]
+//   timeSlots       TimeSlot[]
+//   appointments    Appointment[]
+//   reviews         Review[]
+// }
+
+// model Hospital {
+//   id            Int      @id @default(autoincrement())
+//   name          String
+//   address       String
+//   city          String
+//   state         String
+//   zipCode       String
+//   contactNumber String
+//   createdAt     DateTime @default(now())
+//   updatedAt     DateTime @updatedAt
+//   doctors       DoctorHospital[]
+//   availability  AvailabilitySlot[]
+//   timeSlots     TimeSlot[]
+// }
+
+// model DoctorHospital {
+//   id         Int      @id @default(autoincrement())
+//   doctor     Doctor   @relation(fields: [doctorId], references: [id])
+//   doctorId   Int
+//   hospital   Hospital @relation(fields: [hospitalId], references: [id])
+//   hospitalId Int
+//   isPrimary  Boolean  @default(false)
+//   createdAt  DateTime @default(now())
+//   updatedAt  DateTime @updatedAt
+//   @@unique([doctorId, hospitalId])
+// }
+
+// model AvailabilitySlot {
+//   id              Int      @id @default(autoincrement())
+//   doctor          Doctor   @relation(fields: [doctorId], references: [id])
+//   doctorId        Int
+//   hospital        Hospital @relation(fields: [hospitalId], references: [id])
+//   hospitalId      Int
+//   dayOfWeek       DayOfWeek
+//   startTime       String
+//   endTime         String
+//   slotDuration    Int
+//   maxPatients     Int      @default(1)
+//   consultationType ConsultationType
+//   isActive        Boolean  @default(true)
+//   createdAt       DateTime @default(now())
+//   updatedAt       DateTime @updatedAt
+//   timeSlots       TimeSlot[]
+// }
+
+// enum DayOfWeek {
+//   monday
+//   tuesday
+//   wednesday
+//   thursday
+//   friday
+//   saturday
+//   sunday
+// }
+
+// enum ConsultationType {
+//   online
+//   offline
+//   both
+// }
+
+// model TimeSlot {
+//   id            Int      @id @default(autoincrement())
+//   availability  AvailabilitySlot @relation(fields: [availabilityId], references: [id])
+//   availabilityId Int
+//   doctor        Doctor   @relation(fields: [doctorId], references: [id])
+//   doctorId      Int
+//   hospital      Hospital @relation(fields: [hospitalId], references: [id])
+//   hospitalId    Int
+//   date          DateTime
+//   startTime     String
+//   endTime       String
+//   bookedCount   Int      @default(0)
+//   status        TimeSlotStatus @default(available)
+//   createdAt     DateTime @default(now())
+//   updatedAt     DateTime @updatedAt
+//   appointments  Appointment[]
+// }
+
+// enum TimeSlotStatus {
+//   available
+//   fully_booked
+//   unavailable
+// }
+
+// model Appointment {
+//   id               Int      @id @default(autoincrement())
+//   bookingReference String   @unique
+//   user             UserProfile     @relation(fields: [userProfileId], references: [id])
+//  userProfileId    String
+//   doctor           Doctor   @relation(fields: [doctorId], references: [id])
+//   doctorId         Int
+//   hospital         Hospital @relation(fields: [hospitalId], references: [id])
+//   hospitalId       Int
+//   timeSlot         TimeSlot @relation(fields: [timeSlotId], references: [id])
+//   timeSlotId       Int
+//   appointmentDate  DateTime
+//   startTime        String
+//   endTime          String
+//   consultationType ConsultationType
+//   reasonForVisit   String?
+//   status           AppointmentStatus @default(scheduled)
+//   paymentStatus    PaymentStatus @default(pending)
+//   cancellationReason String?
+//   createdAt        DateTime @default(now())
+//   updatedAt        DateTime @updatedAt
+// }
+
+// enum AppointmentStatus {
+//   scheduled
+//   confirmed
+//   completed
+//   canceled
+//   no_show
+// }
+
+// enum PaymentStatus {
+//   pending
+//   completed
+//   refunded
+//   failed
+// }
+
+// model Payment {
+//   id            Int      @id @default(autoincrement())
+//   appointment   Appointment @relation(fields: [appointmentId], references: [id])
+//   appointmentId Int
+//   amount        Decimal
+//   transactionId String? @unique
+//   paymentMethod PaymentMethod
+//   paymentStatus PaymentStatus @default(pending)
+//   paymentDetails Json?
+//   createdAt     DateTime @default(now())
+//   updatedAt     DateTime @updatedAt
+// }
+
+// enum PaymentMethod {
+//   upi
+//   credit_card
+//   debit_card
+//   net_banking
+//   insurance
+//   wallet
+// }
+
+// model Review {
+//   id         Int      @id @default(autoincrement())
+//   user       User     @relation(fields: [userId], references: [id])
+//   userId     Int
+//   doctor     Doctor   @relation(fields: [doctorId], references: [id])
+//   doctorId   Int
+//   appointment Appointment @relation(fields: [appointmentId], references: [id])
+//   appointmentId Int
+//   rating     Float   @default(1.0)
+//   reviewText String?
+//   isVerified Boolean  @default(false)
+//   createdAt  DateTime @default(now())
+//   updatedAt  DateTime @updatedAt
+//   @@unique([userId, appointmentId])
+// }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ///=================
